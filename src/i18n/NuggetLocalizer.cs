@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.Remoting.Messaging;
 using System.Web;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -38,6 +39,7 @@ namespace i18n
 
         public string ProcessNuggets(string entity, LanguageItem[] languages)
         {
+            var file = entity;
            // Lookup any/all msgid nuggets in the entity and replace with any translated message.
             string entityOut = _nuggetParser.ParseString(entity, delegate(string nuggetString, int pos, Nugget nugget, string i_entity)
             {
@@ -79,7 +81,9 @@ namespace i18n
                             if (formatItems[i] == null || !formatItems[i].Contains(_settings.NuggetParameterBeginToken)) continue;
 
                             // replace parameter tokens with nugget tokens 
-                            var fItem = formatItems[i].Replace(_settings.NuggetParameterBeginToken, _settings.NuggetBeginToken).Replace(_settings.NuggetParameterEndToken, _settings.NuggetEndToken);
+                            var fItem = formatItems[i].Replace(_settings.NuggetParameterBeginToken, _settings.NuggetBeginToken)
+                                                      .Replace(_settings.NuggetParameterEndToken, _settings.NuggetEndToken)
+                                                      .Replace(_settings.NuggetParameterCommentToken, _settings.NuggetCommentToken);
                             // and process nugget 
                             formatItems[i] = ProcessNuggets(fItem, languages);
                         }

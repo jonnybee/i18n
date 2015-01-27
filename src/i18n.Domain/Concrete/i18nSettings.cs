@@ -306,6 +306,27 @@ namespace i18n.Domain.Concrete
             }
         }
 
+        private const string NuggetParameterCommentTokenDefault = "^^^";
+        public virtual string NuggetParameterCommentToken
+        {
+            get
+            {
+                string prefixedString = GetPrefixedString("NuggetParameterCommentToken");
+                string setting = _settingService.GetSetting(prefixedString);
+                if (setting != null)
+                {
+                    return setting;
+                }
+                return NuggetParameterCommentTokenDefault;
+            }
+            set
+            {
+                string prefixedString = GetPrefixedString("NuggetParameterCommentToken");
+                _settingService.SetSetting(prefixedString, value);
+            }
+        }
+
+
         private const string NuggetVisualizeTokenDefault = "!";
         public virtual string NuggetVisualizeToken
         {
