@@ -39,7 +39,6 @@ namespace i18n
 
         public string ProcessNuggets(string entity, LanguageItem[] languages)
         {
-            var file = entity;
            // Lookup any/all msgid nuggets in the entity and replace with any translated message.
             string entityOut = _nuggetParser.ParseString(entity, delegate(string nuggetString, int pos, Nugget nugget, string i_entity)
             {
