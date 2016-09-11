@@ -1,35 +1,122 @@
 ﻿using System;
+using System.IO;
+using i18n.Domain.Concrete;
+using i18n.Domain.Entities;
+using i18n.Domain.Helpers;
 
 namespace i18n.PostBuild
 {
-    class Program
+    public class Program
     {
-        static void Main(string[] args)
+        public bool ShowHelp { get; set; }
+        public bool ShowSourceContext { get; set; }
+        public string ConfigPath { get; set; }
+
+        public static void Main(string[] args)
         {
-            if(args.Length == 0)
+            Environment.ExitCode = 1;
+
+            try
             {
-                Console.WriteLine("This post build task requires passing in the $(ProjectDirectory) path");
-                return;
+                var program = new Program();
+                program.ParseArguments(args);
+
+                if (program.ShowHelp)
+                {
+                    ShowUsage();
+                }
+                else
+                {
+                    program.Run();
+                }
+
+                Environment.ExitCode = 0;
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine("ERROR: {0}", exception.Message);
+            }
+        }
+
+        private void ParseArguments(string[] args)
+        {
+            foreach (var arg in args)
+            {
+                if (arg.StartsWith("/") || arg.StartsWith("-"))
+                {
+                    var option = arg.Substring(1);
+
+                    switch (option.ToLowerInvariant())
+                    {
+                        case "help":
+                            ShowHelp = true;
+                            break;
+
+                        case "source":
+                            ShowSourceContext = true;
+                            break;
+
+                        default:
+                            throw new Exception("Unknown option: " + arg);
+                    }
+
+                }
+                else if (string.IsNullOrWhiteSpace(ConfigPath))
+                {
+                    ConfigPath = arg;
+                }
+                else
+                {
+                    throw new Exception("Can only specify one configPath");
+                }
             }
 
-            var path = args[0];
-            path = path.Trim(new[] {'\"'});
+            ShowHelp = ShowHelp || string.IsNullOrWhiteSpace(ConfigPath);
+        }
 
-            string gettext = null;
-            string msgmerge = null;
-            string[] inputPaths = null;
-            for (int i = 1; i < args.Length; i++)
+        private static void ShowUsage()
+        {
+            Console.WriteLine("usage: i18n.PostBuild [options] configPath");
+            Console.WriteLine();
+            Console.WriteLine("where: configPath - path to web.config file");
+            Console.WriteLine("       /help      - show this message");
+            Console.WriteLine("       /source    - append source context to references");
+            Console.WriteLine();
+        }
+
+        private void Run()
+        {
+            ThrowIfConfigFileNotFound();
+
+            ReferenceContext.ShowSourceContext = ShowSourceContext;
+
+			//todo: this assumes PO files, if not using po files then other solution needed.
+			var settings = new i18nSettings(new WebConfigSettingService(ConfigPath));
+			var repository = new POTranslationRepository(settings);
+
+			var nuggetFinder = new FileNuggetFinder(settings);
+	        var items = nuggetFinder.ParseAll();
+	        repository.SaveTemplate(items);
+
+			var merger = new TranslationMerger(repository);
+			merger.MergeAllTranslation(items);
+
+            Console.WriteLine("i18n.PostBuild completed successfully.");
+        }
+
+        private void ThrowIfConfigFileNotFound()
+        {
+            try
             {
-                if (args[i].StartsWith("gettext:", StringComparison.InvariantCultureIgnoreCase))
-                    gettext = args[i].Substring(8);
-
-                if (args[i].StartsWith("msgmerge:", StringComparison.InvariantCultureIgnoreCase))
-                    msgmerge = args[i].Substring(9);
-                if (args[i].StartsWith("inputpaths:", StringComparison.InvariantCultureIgnoreCase))
-                    inputPaths = args[i].Substring(11).Split(',');
+                using (File.Open(ConfigPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                }
             }
-
-            new PostBuildTask().Execute(path, gettext, msgmerge, inputPaths);
+            catch (Exception)
+            {
+                Console.WriteLine("Failed to open config file: {0}", ConfigPath);
+                throw;
+            }
         }
     }
 }
