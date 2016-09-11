@@ -21,11 +21,11 @@ namespace i18n
         {
             // Use Lazy to delay the creation of objects to when a request is being processed.
             // When initializing the app thehi may throw "Request is not available in this context" from WebConfigService 
-            translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(new i18nSettings(new WebConfigSettingService(null))));
+            translationRepository = new Lazy<POTranslationRepository>(() => new POTranslationRepository(new i18nSettings(new WebConfigSettingService())));
             urlLocalizer = new UrlLocalizer();
-            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(new i18nSettings(new WebConfigSettingService(null)), TranslationRepositoryForApp));
+            textLocalizer = new Lazy<TextLocalizer>(() => new TextLocalizer(new i18nSettings(new WebConfigSettingService()), TranslationRepositoryForApp));
             earlyUrlLocalizer = new EarlyUrlLocalizer(urlLocalizer);
-            nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(new i18nSettings(new WebConfigSettingService(null)), TextLocalizerForApp));
+            nuggetLocalizer = new Lazy<NuggetLocalizer>(() => new NuggetLocalizer(new i18nSettings(new WebConfigSettingService()), TextLocalizerForApp));
         }
 
         #region [IRootServices]
@@ -208,6 +208,15 @@ namespace i18n
         /// This feature requires the LocalizedModule HTTP module to be intalled in web.config.<br/>
         /// </remarks>
         public Regex UrlsToExcludeFromProcessing = new Regex(@"(?:\.(?:less|css)(?:\?|$))|(?i:i18nSkip|glimpse|trace|elmah)");
+
+        /// <summary>
+        /// Comma separated value string that lists the async postback types that should be localized.
+        /// </summary>
+        /// <remarks>
+        /// Defaults to "updatePanel,scriptStartupBlock,pageTitle"<br/>
+        /// Clients may customise this member in Application_Start.<br/>
+        /// </remarks>
+        public string AsyncPostbackTypesToTranslate = "updatePanel,scriptStartupBlock,pageTitle";
 
         public LocalizedApplication(IRootServices i_RootServices = null)
         {

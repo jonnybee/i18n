@@ -44,13 +44,11 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Helpers\TextLocalizer_Mockup.cs" />
+    <Compile Include="Tests\LanguageMatchingTests.cs" />
     <Compile Include="Tests\LanguageTagTests.cs" />
     <Compile Include="Tests\NuggetLocalizerTests.cs" />
     <Compile Include="Tests\ResponseFilterTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\i18n.Domain\i18n.Domain.csproj">
@@ -67,7 +65,6 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

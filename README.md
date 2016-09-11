@@ -1,5 +1,8 @@
 # i18n (v2)
 ## Smart internationalization for ASP.NET
+```
+    PM> Install-Package i18N
+```
 ### Introduction
 
 The i18n library is designed to replace the use of .NET resources in favor 
@@ -22,6 +25,7 @@ based on ASP.NET v4 and above, including:
 - SEO-friendly: language selection varies the URL, and `Content-Language` is set appropriately
 - Automatic: no URL/routing changes required in the app
 - High performance, minimal overhead and minimal heap allocations
+- Unit testing support
 - Smart: knows when to hold them, fold them, walk away, or run, based on i18n best practices
 
 ### Project Configuration
@@ -44,10 +48,6 @@ HttpModule called i18n.LocalizingModule which should be enabled in your web.conf
 ```
 
 Note: The ```<system.web>``` element is added for completeness and may not be required.
-
-Note: i18n requires static compression to be disabled for localized content. Refer to 
-[Issue #163](https://github.com/turquoiseowl/i18n/issues/163#issuecomment-68811808) 
-for more on IIS compression settings.
 
 The following ```<appSettings>``` are then required to specify the type and location 
 of your application's source files:
@@ -79,12 +79,21 @@ code shows the most common options:
             // Change the URL localization scheme from Scheme1.
             i18n.UrlLocalizer.UrlLocalizationScheme = i18n.UrlLocalizationScheme.Scheme2;
 
-            // Blacklist certain URLs from being 'localized'.
+            // Blacklist certain URLs from being 'localized' via a callback.
             i18n.UrlLocalizer.IncomingUrlFilters += delegate(Uri url) {
                 if (url.LocalPath.EndsWith("sitemap.xml", StringComparison.OrdinalIgnoreCase)) {
                     return false; }
                 return true;
             };
+
+            // Blacklist certain URLs from being translated using a regex pattern. The default setting is:
+            //i18n.LocalizedApplication.Current.UrlsToExcludeFromProcessing = new Regex(@"(?:\.(?:less|css)(?:\?|$))|(?i:i18nSkip|glimpse|trace|elmah)");
+
+            // Whitelist content types to translate. The default setting is:
+            //i18n.LocalizedApplication.Current.ContentTypesToLocalize = new Regex(@"^(?:(?:(?:text|application)/(?:plain|html|xml|javascript|x-javascript|json|x-json))(?:\s*;.*)?)$");
+
+			// Change the types of async postback blocks that are localized
+			//i18n.LocalizedApplication.Current.AsyncPostbackTypesToTranslate = "updatePanel,scriptStartupBlock,pageTitle";
         }
     }
 ```
@@ -184,16 +193,17 @@ where the %0 and %1 tokens are replaced by the strings that replace the {0} and 
 (The reason for the extra level of redirection here is to facilitate the translator rearranging the order of
 the tokens for different languages.)
 
-Nugget transformation also support translation of parameters like  
+Nugget transformation supports translation of the arguments as follows:
+
 ```
 [DisplayName("[[[CountryCode]]]")]
 [MaxLength(20, ErrorMessage="[[[%0 must be %1 characters or less|||(((CountryCode)))|||20]]]")]
 public string CountryCode { get; set; }
 ```
-Where the Nugget markup will first replace (((CountryCode)) with the translated text and then merge the 
+where the Nugget markup will first replace (((CountryCode)) with the translated text and then merge the 
 translated value into the main message. 
 
-Nugget markup also supports comments (_extracted comments_ in PO parlance) to be passed to the translator like so:
+Nugget markup supports comments (_extracted comments_ in PO terminology) to be passed to the translator like so:
 
 ```
 [[[translate me///this is an extracted comment]]]
@@ -255,6 +265,25 @@ To enable this feature:
 When VisualizeMessages is active the NuggetVisualizeToken will be inserted at start and end of
 each translated message.   
 
+Two more optional parameters can be used to further customize the message visualization. 
+`i18n.VisualizeLanguageSeparator`
+This enables display of the language tag that was use to localize each message. The language tag will be shown before each message, separated from the message by this parameter value. If the value is a blank string or the parameter is not present then language tags are not shown in message visualizations.
+`i18n.NuggetVisualizeEndToken`
+This allows for using different start and end tokens for visualizing messages. When this value is specified then the NuggetVisualizeToken will be inserted at start of each translated message and the NuggetVisualizeEndToken will be inserted at end of each translated message.
+
+For example, to display language tags separated from messages by a colon, and add brackets to enclose the visualized messages, use the following message visualization configuration.
+
+```xml
+  <appSettings>
+    ...
+    <add key="i18n.VisualizeMessages" value="true" />
+    <add key="i18n.VisualizeLanguageSeparator" value=":" />
+    <add key="i18n.NuggetVisualizeToken" value="![" />
+    <add key="i18n.NuggetVisualizeEndToken" value="]!" />
+    ...
+  </appSettings>
+```
+
 #### Message Context Support
 
 i18n allows you to assign a ```msgctxt``` value to each message. The value of the msgctxt is
@@ -288,6 +317,38 @@ message spread over
 three lines]]]
 ```
 
+### Static File Compression and i18n
+The i18n module localizes nuggets in the HTTP response by modifying the response stream using a response filter 
+(see the .NET Framework documentation for more info about the HttpResponse.Filter property).
+If the response stream is compressed before it reaches the i18n module then the module does not modify the stream.
+Currently the module is not designed to intercept static file requests before compression happens.
+
+Two checks are implemented to ensure that the module does not modify compressed response streams:
+1. In i18n.LocalizingModule there is a check to see if the response Content-Encoding header is set to "gzip" 
+and if it is then the module does not install the response filter.
+2. In i18n.ResponseFilter the stream content is checked for the presence of the gzip file format magic number (the first
+two bytes of a gzip file are set to 1F 8B). If the magic number is found at the beginning of the stream then the content
+is passed through without modification by the filter.
+
+Because of the way that static file compression works in IIS, some responses to static files requests do not get 
+compressed, so if you have static file compression enabled (it is enabled by default) **AND** you have nuggets within the 
+content of a static file, then the response received by a client will be localized when the response is not compressed 
+and it will not be localized when the response is compressed. In order to prevent this, it is important that you decide
+whether or not you will localize static files on your site because you need to do one of the following:
+1. If you want to use nuggets and localize static files - **disable static file compression**. This means that you will not
+get the benefit of the bandwidth savings of compressing static files, but if you are localizing static files then you have
+essentially taken the decision to make the static files dynamic.
+2. If you do not need to use nuggets and localize static files - **leave static file compression enabled**. You will now get
+the benefit of the bandwidth savings of compressing static files, but it is important that you must not put nuggets in the 
+static files.
+
+Note: Refer to 
+[Issue #163](https://github.com/turquoiseowl/i18n/issues/163#issuecomment-68811808) 
+for more on IIS compression settings.
+
+Note: The Microsoft ScriptManager compresses responses to requests for ScriptResource.axd so these responses will always be 
+compressed and the script that is returned by the ScriptManager will not be localized even if you disable static file compression. 
+
 ### Building PO databases
 
 To set up automatic PO database building, add the following post-build task to your project, after
@@ -311,6 +372,13 @@ are automatically merged with the template, so that new strings can be flagged f
 From here, you can use any of the widely available PO editing tools (like [POEdit](http://www.poedit.net))
 to provide locale-specific text and place them in your `locale` folder relative to the provided language, e.g. `locale/fr`. 
 If you change a PO file on the fly, i18n will update accordingly; you do _not_ need to restart your application.
+Note that the locale-specific file must be named messages.po. For example, your locale folder structure will be similar to (three languages, fr, es, and es-MX are defined):
+```
+locale/messages.pot
+locale/fr/messages.po
+locale/es/messages.po
+locale/es-MX/messages.po
+```
 
 ### URL Localization
 
@@ -430,11 +498,23 @@ PAL of the current request. For example, it may be called in a Razor view as fol
 the current langue to the user:
 
 ```xml
+    @using i18n
+
     <div>
         <p id="lang_cur" title="@Context.GetPrincipalAppLanguageForRequest()">
             @Context.GetPrincipalAppLanguageForRequest().GetNativeNameTitleCase()
         </p>
     </div>
+```
+
+Similarly, the HTML ```lang``` attribute can be set as follows:
+
+```xml
+    @using i18n
+
+    <html lang="@Context.GetPrincipalAppLanguageForRequest()">
+        ...
+    </html>
 ```
 
 ### Per-Request Default Language Determination
@@ -471,12 +551,14 @@ so that the URL always contains the current language tag.
 
 ### Explicit User Language Selection
 
-You probably want to allow users to override their browser language settings by providing a language selection
-feature in your application. There are two parts to implementing this feature with i18n which revolve around
+You can provide a language selection feature in your application using i18n.
+There are two parts to implementing this feature which revolve around
 the setting of a cookie called `i18n.langtag`.
 
-Firstly, you need to provide HTML that displays the current language and allows the user to explicitly select
-a language (from those ApplicationLanguages available). An example of how to do that in ASP.NET MVC and Razor follows:
+Firstly, provide HTML that displays the current language and allows the user to explicitly select
+a language (from those application languages available).
+
+An example of how to do that in ASP.NET MVC and Razor follows:
 
 ```xml
 @using i18n
@@ -534,8 +616,7 @@ a language (from those ApplicationLanguages available). An example of how to do 
 </div>
 ```
 
-On selection of a language in the above code, the AccountController.SetLanguage method is called, an example of
-which follows:
+On selection of a language in the above code, the AccountController.SetLanguage method is called. For example:
 
 ```csharp
 
@@ -626,7 +707,7 @@ that require parsing using the ```ParseAndTranslate``` extension method to HttpC
 ### Language Matching
 
 Language matching is performed when a list of one or more user-preferred languages is matched against
-a list of one or more application laguages, the goal being to choose the application languages
+a list of one or more application languages, the goal being to choose the application languages
 which the user is most likely to understand. The algorithm for this is multi-facted and multi-pass and takes the Language, 
 Script and Region subtags into account.
 
@@ -661,24 +742,66 @@ Note the `-x-`, after which you can add four or more alphanumeric characters to 
 There must be an exact match for all subtags for this translation to be returned. If the module can't find a 
 translation for the tenant, it will match the remaining subtags according to the algorithm described above.
 
+##### Microsoft Pseudo-Locales and App Testing
+
+As an aid to testing the localization of you app, Microsoft have added some
+['pseudo-locales'](https://msdn.microsoft.com/en-us/library/windows/desktop/dd319106(v=vs.85).aspx) to Windows.
+
+Specifically, these are identified by the following special language tags ```qps-ploc```, ```qps-plocm``` and
+```qps-ploa```.
+
+i18n supports the use of these special locales. See [Issue #195](https://github.com/turquoiseowl/i18n/issues/195)
+for further details.
+
 ##### Language Matching Update
 
 The latest refinement to the language matching algoritm:
 
 ```csharp
-        // Principle Application Language (PAL) Prioritization:
-        //   User has selected an explicit language in the webapp e.g. fr-CH (i.e. PAL is set to fr-CH).
-        //   Their browser is set to languages en-US, en, zh-Hans.
-        //   Therefore, UserLanguages[] equals fr-CH, en-US, zh-Hans.
-        //   We don't have a particular message in fr-CH, but have it in fr and fr-CA.
-        //   We also have message in en-US and zh-Hans.
-        //   Surely, the message from fr or fr-CA is better match than en-US or zh-Hans.
-        //   However, without PAL prioritization, en-US is returned and failing that, zh-Hans.
-        //   Therefore, for the 1st entry in UserLanguages (i.e. explicit user selection in app)
-        //   we try all match grades first. Only if there is no match whatsoever for the PAL
-        //   do we move no to the other (browser) languages, where return to prioritizing match grade
-        //   i.e. loop through all the languages first at the strictest match grade before loosening 
-        //   to the next match grade, and so on.
+// Principle Application Language (PAL) Prioritization:
+//   User has selected an explicit language in the webapp e.g. fr-CH (i.e. PAL is set to fr-CH).
+//   Their browser is set to languages en-US, zh-Hans.
+//   Therefore, UserLanguages[] equals fr-CH, en-US, zh-Hans.
+//   We don't have a particular message in fr-CH, but have it in fr and fr-CA.
+//   We also have message in en-US and zh-Hans.
+//   We presume the message from fr or fr-CA is better match than en-US or zh-Hans.
+//   However, without PAL prioritization, en-US is returned and failing that, zh-Hans.
+//   Therefore, for the 1st entry in UserLanguages (i.e. explicit user selection in app)
+//   we try all match grades first. Only if there is no match whatsoever for the PAL
+//   do we move no to the other (browser) languages, where return to prioritizing match grade
+//   i.e. loop through all the languages first at the strictest match grade before loosening 
+//   to the next match grade, and so on.
+// Refinement to PAL Prioritization:
+//   UserLanguages (UL) = de-ch,de-at (PAL = de-ch)
+//   AppLanguages  (AL) = de,de-at,en
+//   There is no exact match for PAL in AppLanguages.
+//   However:
+//    1. the second UL (de-at) has an exact match with an AL
+//    2. the parent of the PAL (de) has an exact match with an AL.
+//   Normally, PAL Prioritization means that 2. takes preference.
+//   However, that means choosing de over de-at, when the user
+//   has said they understand de-at (it being preferable to be
+//   more specific, esp. in the case of different scripts under 
+//   the same language).
+//   Therefore, as a refinement to PAL Prioritization, before selecting
+//   'de' we run the full algorithm again (without PAL Prioritization) 
+//   but only considering langtags related to the PAL.
+```
+
+### UpdatePanel / Async Postbacks / Partial Page Rendering
+
+Responses to UpdatePanel async postback requests are handled as a special case because the content of the response is a 
+set of formatted blocks, which may or may not contain partial segments of text or HTML that need to be localized. Each 
+formatted block has the following structure
+
+`length|type|id|content|`
+
+By default, only blocks with a type of **updatePanel**, **scriptStartupBlock**, or **pageTitle** get localized. You can 
+localize segments in other block types by changing the value of AsyncPostbackTypesToTranslate in Application_Start. For 
+example, to include the **hiddenField** blocks, add the following to Application_Start
+
+```
+i18n.LocalizedApplication.Current.AsyncPostbackTypesToTranslate = "updatePanel,scriptStartupBlock,pageTitle,hiddenField";
 ```
 
 ### A reminder about folders in a web application
@@ -702,6 +825,25 @@ to this folder by adding a `Web.config` file.
         </system.webServer>
     </configuration>
 ```
+
+### Unit Testing With i18n
+
+i18n provides the ```i18n.ITranslateSvc``` interface that abstracts the basic operation of parsing
+and translating a string entity that may contain one or more nuggets:
+
+```
+    public interface ITranslateSvc
+    {
+        string ParseAndTranslate(string entity);
+    }
+```
+
+The following stock implementations of ```i18n.ITranslateSvc``` are provided by the library:
+
+- TranslateSvc_Invariant - ITranslateSvc implementation that simply passes through the entity (useful for testing).
+- TranslateSvc_HttpContextBase - ITranslateSvc implementation based on an given HttpContextBase instance.
+- TranslateSvc_HttpContext - ITranslateSvc implementation based on an given HttpContext instance.
+- TranslateSvc_HttpContextCurrent - ITranslateSvc implementation based on the static HttpContext.Current instance (obtained at the time of calling the interface).
 
 ### Build Notes
 
@@ -736,3 +878,8 @@ to CR/LF when checking text files out of the index, and converting them back to 
 This behaviour is controlled via Git's ```core.autocrlf``` setting, which in this case would be set to ```true```.
 
 See [Dealing with line endings](https://help.github.com/articles/dealing-with-line-endings/) for more information.
+
+### Acknowledgments
+
+Among the many contributors to the i18n library, a special acknowledgement is due to Daniel Crenna 
+who originated this project.
