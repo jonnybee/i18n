@@ -71,6 +71,9 @@ code shows the most common options:
             // Change from the default of 'en'.
             i18n.LocalizedApplication.Current.DefaultLanguage = "fr";
 
+            // Change from the default of 'i18n.langtag'.
+            i18n.LocalizedApplication.Current.CookieName = "i18n_langtag";
+
             // Change from the of temporary redirects during URL localization
             i18n.LocalizedApplication.Current.PermanentRedirects = true;
 
@@ -80,11 +83,30 @@ code shows the most common options:
             // Change the URL localization scheme from Scheme1.
             i18n.UrlLocalizer.UrlLocalizationScheme = i18n.UrlLocalizationScheme.Scheme2;
 
+            // Change i18n's expectation for the ASP.NET application's virtual application root path on the server, 
+            // used by Url Localization. Defaults to "/".
+            //i18n.LocalizedApplication.Current.ApplicationPath = "/mysite";
+
+            // Specifies whether the key for a message may be assumed to be the value for
+            // the message in the default language. Defaults to true.
+            //i18n.LocalizedApplication.Current.MessageKeyIsValueInDefaultLanguage = false;
+
             // Blacklist certain URLs from being 'localized' via a callback.
             i18n.UrlLocalizer.IncomingUrlFilters += delegate(Uri url) {
                 if (url.LocalPath.EndsWith("sitemap.xml", StringComparison.OrdinalIgnoreCase)) {
                     return false; }
                 return true;
+            };
+
+            // Extend (+=) or override (=) the default handler for Set-PAL event.
+            // The default handler applies the setting to both the CurrentCulture and CurrentUICulture
+            // settings of the thread, as shown below.
+            i18n.LocalizedApplication.Current.SetPrincipalAppLanguageForRequestHandlers = delegate(System.Web.HttpContextBase context, ILanguageTag langtag)
+            {
+                // Do own stuff with the language tag.
+                // The default handler does the following:
+                if (langtag != null) {
+                    Thread.CurrentThread.CurrentCulture = Thread.CurrentThread.CurrentUICulture = langtag.GetCultureInfo(); }
             };
 
             // Blacklist certain URLs from being translated using a regex pattern. The default setting is:
@@ -98,6 +120,9 @@ code shows the most common options:
 
             // Change which languages are parsed from the request, like skipping  the "Accept-Language"-header value. The default setting is:
             //i18n.HttpContextExtensions.GetRequestUserLanguagesImplementation = (context) => LanguageItem.ParseHttpLanguageHeader(context.Request.Headers["Accept-Language"]);
+
+			// Override the i18n service injection. See source code for more details!
+			//i18n.LocalizedApplication.Current.RootServices = new Myi18nRootServices();
         }
     }
 ```
@@ -430,7 +455,7 @@ Firstly, you can set a RegEx pattern to match against the localpath part of the 
     {
         ...
         // Blacklist certain URLs from being 'localized'.
-        i18n.UrlLocalizer.QuickUrlExclusionFilter = new System.Text.RegularExpressions.Regex(@"(?:sitemap\.xml|\.css|\.less|\.jpg|\.jpeg|\.png|\.gif|\.ico|\.svg|\.woff|\.woff2|\.ttf|\.eot)$", RegexOptions.IgnoreCase);
+        i18n.UrlLocalizer.QuickUrlExclusionFilter = new System.Text.RegularExpressions.Regex(@"(^\/api\/)|((sitemap\.xml|\.css|\.less|\.jpg|\.jpeg|\.png|\.gif|\.ico|\.svg|\.woff|\.woff2|\.ttf|\.eot)$)", RegexOptions.IgnoreCase);
     }
 ```
 

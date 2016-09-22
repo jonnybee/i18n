@@ -132,7 +132,7 @@ namespace i18n
         /// for all messages in the default language, even though in reality a translation
         /// is not present for the message in the default language's PO file.<br/>
         /// When false, an explicit translation is required in the default language. Typically
-        /// this can be useful where key are not strings to be output but rather codes or mnemonics
+        /// this can be useful where keys are not strings to be output but rather codes or mnemonics
         /// of some kind.
         /// </remarks>
         public bool MessageKeyIsValueInDefaultLanguage { get; set; }
@@ -154,6 +154,11 @@ namespace i18n
         /// and does NOT end with a forward slash.
         /// </remarks>
         public string ApplicationPath { get; set; }
+
+        /// <summary>
+        /// The name for the i18n cookie. Defaults to "i18n.langtag".
+        /// </summary>
+        public string CookieName { get; set; }
 
         /// <summary>
         /// Declares a method type for handling the setting of the language.
@@ -222,6 +227,7 @@ namespace i18n
 
             // Default settings.
             DefaultLanguage = ("en");
+            CookieName = "i18n.langtag";
             MessageKeyIsValueInDefaultLanguage = true;
             PermanentRedirects = false;
 
