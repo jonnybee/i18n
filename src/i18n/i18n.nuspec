@@ -1,4 +1,4 @@
-<?xml version="1.0"?>
+﻿<?xml version="1.0"?>
 <package >
   <metadata>
     <id>$id$</id>
@@ -9,10 +9,10 @@
     <projectUrl>https://github.com/turquoiseowl/i18n</projectUrl>
     <iconUrl>http://apitize.com.s3.amazonaws.com/logo_i18n.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-	  <summary>Smart internationalization for ASP.NET (official i18n nuget package).</summary>
-	  <description>Smart internationalization for ASP.NET-based web applications. The i18n library is designed to replace the use of .NET resources in favor of an easier, globally-recognized standard for localizing ASP.NET-based web applications. Supports ASP.NET MVC, ASP.NET Web API, ASP.NET WebMatrix / Web Pages and ASP.NET Web Forms.</description>
+      <summary>Smart internationalization for ASP.NET (official i18n nuget package).</summary>
+      <description>Smart internationalization for ASP.NET-based web applications. The i18n library is designed to replace the use of .NET resources in favor of an easier, globally-recognized standard for localizing ASP.NET-based web applications. Supports ASP.NET MVC, ASP.NET Web API, ASP.NET WebMatrix / Web Pages and ASP.NET Web Forms.</description>
     <releaseNotes></releaseNotes>
-    <copyright>Copyright 2011-2016</copyright>
+    <copyright>Copyright 2011-2017</copyright>
     <tags>i18n internationalization l10n localization globalization asp.net mvc PO</tags>
   </metadata>
   <files>

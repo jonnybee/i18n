@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using i18n.Domain.Concrete;
 using i18n.Domain.Entities;
 using i18n.Domain.Helpers;
@@ -35,6 +36,15 @@ namespace i18n.PostBuild
             catch (Exception exception)
             {
                 Console.WriteLine("ERROR: {0}", exception.Message);
+                if (exception.InnerException == null)
+                {
+                    return;
+                }
+                while (exception.InnerException != null)
+                {
+                    exception = exception.InnerException;
+                }
+                Console.WriteLine("Error (InnerException): {0}", exception.Message);
             }
         }
 
@@ -90,16 +100,18 @@ namespace i18n.PostBuild
 
             ReferenceContext.ShowSourceContext = ShowSourceContext;
 
-			//todo: this assumes PO files, if not using po files then other solution needed.
-			var settings = new i18nSettings(new WebConfigSettingService(ConfigPath));
-			var repository = new POTranslationRepository(settings);
+            //todo: this assumes PO files, if not using po files then other solution needed.
+            var settings = new i18nSettings(new WebConfigSettingService(ConfigPath));
+            settings.LocaleOtherFiles = Enumerable.Empty<string>();
+            var repository = new POTranslationRepository(settings);
 
-			var nuggetFinder = new FileNuggetFinder(settings);
-	        var items = nuggetFinder.ParseAll();
-	        repository.SaveTemplate(items);
-
-			var merger = new TranslationMerger(repository);
-			merger.MergeAllTranslation(items);
+            var nuggetFinder = new FileNuggetFinder(settings);
+            var items = nuggetFinder.ParseAll();
+            if (repository.SaveTemplate(items))
+            {
+                var merger = new TranslationMerger(repository);
+                merger.MergeAllTranslation(items);
+            }
 
             Console.WriteLine("i18n.PostBuild completed successfully.");
         }

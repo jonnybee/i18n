@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using System.Text.RegularExpressions;
 using i18n.Helpers;
 using i18n.Domain.Concrete;
@@ -26,10 +25,10 @@ namespace i18n
             _textLocalizer = textLocalizer;
 
             _nuggetParser = new NuggetParser(new NuggetTokens(
-			    _settings.NuggetBeginToken,
-			    _settings.NuggetEndToken,
-			    _settings.NuggetDelimiterToken,
-			    _settings.NuggetCommentToken),
+                _settings.NuggetBeginToken,
+                _settings.NuggetEndToken,
+                _settings.NuggetDelimiterToken,
+                _settings.NuggetCommentToken),
                 NuggetParser.Context.ResponseProcessing);
         }
 
@@ -62,7 +61,7 @@ namespace i18n
                 if (_textLocalizer == null) {
                     return "test.message"; }
                // Lookup resource using canonical msgid.
-				message = _textLocalizer.GetText(
+                message = _textLocalizer.GetText(
                     true, // true = try lookup with HtmlDecoded-msgid if lookup with raw msgid fails.
                     nugget.MsgId,
                     nugget.Comment,
@@ -93,6 +92,13 @@ namespace i18n
                         message += "[FORMAT EXCEPTION]";
                     }
                 }
+               // Optional late custom message translation modification.
+                if (LocalizedApplication.Current.TweakMessageTranslation != null) {
+                    message = LocalizedApplication.Current.TweakMessageTranslation(
+                        System.Web.HttpContext.Current.GetHttpContextBase(),
+                        nugget,
+                        lt,
+                        message); }
                // Output modified message (to be subsituted for original in the source entity).
                 DebugHelpers.WriteLine("I18N.NuggetLocalizer.ProcessNuggets -- msgid: {0,35}, message: {1}", nugget.MsgId, message);
                //
@@ -148,13 +154,13 @@ namespace i18n
         {
             // Convert %n style identifiers to {n} style.
             return m_regexPrintfIdentifiers.Replace(msgid, delegate(Match match)
-	        {
-	            string s = match.Groups[1].Value;
+            {
+                string s = match.Groups[1].Value;
                 double id;
                 if (ParseHelpers.TryParseDecimal(s, 1, s.Length -1 +1, out id)) {
                     s = string.Format("{{{0}}}", id); }
                 return s;
-	        });
+            });
         }
 
     // Implementation

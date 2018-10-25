@@ -118,8 +118,8 @@ namespace i18n.Tests
             Assert.AreEqual("!!ZipCode! is required!", post);
         }
 
-		
-		[TestMethod]
+        
+        [TestMethod]
         public void NuggetLocalizer_can_visualize_nugget()
         {
             ITextLocalizer textLocalizer = new TextLocalizer_Mock_PrefixSuffix("xxx", "yyy");
@@ -135,5 +135,21 @@ namespace i18n.Tests
             Assert.AreEqual("!xxx123yyy! !xxx456yyy!", post);
         }
 
+        [TestMethod]
+        public void NuggetLocalizer_can_translate_unicode_nugget()
+        {
+            var textLocalizer = new TextLocalizer_Mock_SingleMessage("foo&bar", "blahblah");
+            var obj = new NuggetLocalizer(new i18nSettings(new WebConfigSettingService()), textLocalizer);
+
+            // Lookup HtmlEncoded msgid.
+            var pre = "[[[foo\u0026amp;bar]]]";
+            var post = obj.ProcessNuggets(pre, languages);
+            Assert.AreEqual("blahblah", post);
+
+            // Lookup un-HtmlEncoded msgid.
+            pre = "[[[foo\u0026bar]]]";
+            post = obj.ProcessNuggets(pre, languages);
+            Assert.AreEqual("blahblah", post);
+        }
     }
 }
