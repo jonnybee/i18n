@@ -30,8 +30,17 @@ namespace i18n.Tests
             fakeContext.Response.Returns(fakeResponse);
 
             i18n.EarlyUrlLocalizer obj = new i18n.EarlyUrlLocalizer(new UrlLocalizer());
-            string post = obj.ProcessOutgoing(pre, suffix, fakeContext);
+            string post = obj.ProcessOutgoingNuggets(pre, suffix, fakeContext);
             Assert.AreEqual(expectedPatched, post);
+        }
+
+        [TestMethod]
+        [Description("Issue #337: InstallResponseFilter should not throw exception")]
+        public void Handling_null_content_type()
+        {
+            HttpContextBase fakeContext   = Substitute.For<HttpContextBase>();
+            fakeContext.Response.ContentType = null;
+            LocalizedApplication.InstallResponseFilter(fakeContext);
         }
 
         [TestMethod]

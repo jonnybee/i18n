@@ -1,4 +1,7 @@
 # i18n (v2)
+
+![Build Status](https://github.com/turquoiseowl/i18n/workflows/CI/badge.svg)
+
 ## Smart internationalization for ASP.NET
 ```
     PM> Install-Package i18N
@@ -399,6 +402,8 @@ Note: Refer to
 [Issue #163](https://github.com/turquoiseowl/i18n/issues/163#issuecomment-68811808) 
 for more on IIS compression settings.
 
+Note: in some scenarios, it might be desirable to localize Javascipt (.js) files, making your application case 1. To easily disable static file compression, use the IIS manager and click on site name, Compression and uncheck "Enable static content compression".
+
 Note: The Microsoft ScriptManager compresses responses to requests for ScriptResource.axd so these responses will always be 
 compressed and the script that is returned by the ScriptManager will not be localized even if you disable static file compression. 
 
@@ -409,6 +414,11 @@ adding `i18n.PostBuild.exe` as a project reference:
 
 ```
     "$(TargetDir)i18n.PostBuild.exe" "$(ProjectDir)\web.config"
+```
+You can find i18n.PostBuild.exe file under packages folder: 
+
+``` 
+    {your_solution}\packages\{package_version}\tools\i18n.PostBuild\i18n.PostBuild.exe
 ```
     
 Alternatively, you may choose to install the `i18n.POTGenerator.vsix` Visual Studio extension (2012/2013).
@@ -493,7 +503,7 @@ scheme, Scheme2, will show the language tag only if it is not the default.
 
 URL localization can be disabled by setting the scheme to ```i18n.UrlLocalizationScheme.Void``` in ```Application_Start```:
 
-```
+```csharp
     protected void Application_Start()
     {
         ...
@@ -501,6 +511,22 @@ URL localization can be disabled by setting the scheme to ```i18n.UrlLocalizatio
         i18n.UrlLocalizer.UrlLocalizationScheme = i18n.UrlLocalizationScheme.Void;
     }
 ```
+
+Without URL localization, i18n will rely on the cookie "i18n.langtag" to determine the current language for each request. This means that the language change/setting feature on your site should change the cookie and set the new PrincipalAppLanguage:
+
+```csharp
+  HttpCookie c = new HttpCookie("i18n.langtag") { 
+    Value = Request.QueryString("newLanguage"), 
+    HttpOnly = true, 
+    Expires = DateTime.UtcNow.AddYears(1) 
+    };
+  Response.Cookies.Add(c);
+  i18n.ILanguageTag p = default(i18n.ILanguageTag);
+  p = i18n.LanguageTag.GetCachedInstance(Request.QueryString("newLanguage"));
+  i18n.HttpContextExtensions.SetPrincipalAppLanguageForRequest(this.Context, p);
+```
+
+If you are experiencing problems with static content, maybe also related to browser caching and are having trouble getting the rules for URL exclusion in the following paragraphs to work, the Void scheme might we worth looking into. Please see [Issue #385](https://github.com/turquoiseowl/i18n/issues/385).
 
 #### Exclude URLs from being localized
 
@@ -514,7 +540,7 @@ There are two ways to instruct i18n NOT to localize a URL:
 
 Firstly, you can set a RegEx pattern to match against the localpath part of the URLs to be excluded. For instance:
 
-```
+```csharp
     protected void Application_Start()
     {
         ...
@@ -529,7 +555,7 @@ feel free to override or set to null to disable.
 For finer control, the second method is to define filter delegates that are passed the URL and return
 true if the URL is to be localized, otherwise false. For example:
 
-```
+```csharp
     protected void Application_Start()
     {
         ...
@@ -559,7 +585,7 @@ when using i18n with Scheme2.
 
 You can do this by prefixing the URL like so:
 
-```
+```xml
     <link rel="alternate" hreflang="en" href="@(EarlyUrlLocalizer.IgnoreLocalizationUrlPrefix)http://mysite.com" />
     <link rel="alternate" hreflang="fr" href="http://mysite.com/fr" />
     <link rel="alternate" hreflang="es" href="http://mysite.com/es" />
@@ -644,7 +670,7 @@ For example, suppose you wish the default language to vary as follows:
 
 This can be achieved as follows:
 
-```
+```csharp
     protected void Application_Start()
     {
         ...
@@ -766,8 +792,13 @@ On selection of a language in the above code, the AccountController.SetLanguage 
         // response (Late URL Localization).
         HttpContext.SetPrincipalAppLanguageForRequest(lt);
         // Patch in the new langtag into any return URL.
-        if (returnUrl.IsSet()) {
-            returnUrl = LocalizedApplication.Current.UrlLocalizerForApp.SetLangTagInUrlPath(HttpContext, returnUrl, UriKind.RelativeOrAbsolute, lt == null ? null : lt.ToString()).ToString(); }
+        if (returnUrl.IsSet())
+        {
+            if (LocalizedApplication.Current.UrlLocalizerForApp.FilterOutgoing(returnUrl, HttpContext.Request.Url)) // if url wants to be localized
+            {
+                returnUrl = LocalizedApplication.Current.UrlLocalizerForApp.SetLangTagInUrlPath(HttpContext, returnUrl, UriKind.RelativeOrAbsolute, lt?.ToString()).ToString();
+            }
+        }
         // Redirect user agent as approp.
         return this.Redirect(returnUrl);
     }
@@ -782,7 +813,7 @@ There is a ```GetText``` extension method to HttpContextBase provided for this.
 For example, you can do the following from within an MVC controller action:
 
 
-```
+```csharp
 using System;
 using System.Web.Mvc;
 using i18n;
@@ -813,10 +844,39 @@ by default it is false and so msgcomment argument should be passed as null or em
 Furthermore, you can access the translation of a complete body of text containing zero or more nuggets
 that require parsing using the ```ParseAndTranslate``` extension method to HttpContextBase, as follows:
 
-```
+```csharp
     string entity = HttpContext.ParseAndTranslate("Hi - [[[Sign in]]]");
 ```
 
+or if outside of an HttpContext, for example a background job running an emailing service task:
+
+```csharp
+    string entity = i18n.LanguageHelpers.ParseAndTranslate("[[[Thank you for your payment]]]");
+```
+
+which will translate using the app's default language (i18n.LocalizedApplication.DefaultLanguage), or
+
+```csharp
+    string entity = i18n.LanguageHelpers.ParseAndTranslate("[[[Thank you for your payment]]]", "fr-CA;q=1,fr;q=0.5");
+```
+
+which will use the app language that best matches those specified, or better still
+
+```csharp
+    // During earlier HTTP request from user, save their language(s).
+    string userLanguages = HttpContext.GetRequestUserLanguagesAsString();
+
+    // Switch to background job.
+    HostingEnvironment.QueueBackgroundWorkItem(ct => {
+
+        // Translate using user's languages obtained earlier.
+        string entity = i18n.LanguageHelpers.ParseAndTranslate("[[[Thank you for your payment]]]", userLanguages);
+        ...
+
+    });
+```
+
+which will match against the languages obtained from the user's browser at some point earlier.
 
 ### Language Matching
 
@@ -914,7 +974,7 @@ By default, only blocks with a type of **updatePanel**, **scriptStartupBlock**, 
 localize segments in other block types by changing the value of AsyncPostbackTypesToTranslate in Application_Start. For 
 example, to include the **hiddenField** blocks, add the following to Application_Start
 
-```
+```csharp
 i18n.LocalizedApplication.Current.AsyncPostbackTypesToTranslate = "updatePanel,scriptStartupBlock,pageTitle,hiddenField";
 ```
 
@@ -932,7 +992,7 @@ Here is how to use i18n in OWIN Web API projects:
 - No need to register HttpModule in web.config file.
 - Add the following middleware registration into your startup sequence:
 
-```
+```csharp
 public partial class Startup
 {
     public void Configuration(IAppBuilder app)
@@ -965,7 +1025,7 @@ public partial class Startup
 ```
 
 - Add the following handler to Global.asax:
-```
+```csharp
     /// <summary>
     /// Handles the ReleaseRequestState event of the Application control.
     /// </summary>
@@ -1006,7 +1066,7 @@ to this folder by adding a `Web.config` file.
 i18n provides the ```i18n.ITranslateSvc``` interface that abstracts the basic operation of parsing
 and translating a string entity that may contain one or more nuggets:
 
-```
+```csharp
     public interface ITranslateSvc
     {
         string ParseAndTranslate(string entity);
@@ -1051,8 +1111,7 @@ See [Dealing with line endings](https://help.github.com/articles/dealing-with-li
 
 #### Build Notes
 
-The i18n project at present targets Visual Studio 2013 / .NET Framework 4 and requires the Visual Studio 2013 SDK libraries
-installed to build.
+The i18n project at present targets .NET Framework 4 and later. To build i18n from source, Visual Studio 2019 or later is recommended.
 
 ### Known Issues
 
@@ -1060,9 +1119,23 @@ installed to build.
 
 ### Release History
 
+#### 2.1.16 (20201126)
+
+* ADDED: Enhanced support for translations invoked by background jobs (LanguageHelpers.ParseAndTranslate + HttpContextExtensions.GetRequestUserLanguagesAsString + IBackgroundTranslateSvc).
+* ADDED: i18n project automated build and test (Continuous Integration) with github actions.
+* FIX: i18n.LanguageTag.ExtractLangTagFromUrl returns/outputs incorrect values when passed an absolute url.
+* FIX: Problem with HttpContext.ParseAndTranslate helper method ([#338](https://github.com/turquoiseowl/i18n/issues/338)).
+* FIX: ArgumentNullException if the Content-Type header is not set in the response ([#337](https://github.com/turquoiseowl/i18n/issues/337)).
+* FIX: Missing PO comment lines breaks translation ([#351](https://github.com/turquoiseowl/i18n/issues/351)).
+
+#### 2.1.15 (20190814)
+
+* FIX: NullReferenceException caused by bad langtag ([#387](https://github.com/turquoiseowl/i18n/issues/387)).
+* FIX: LangTag extraction logic broken by URL with query string immediately after lantag ([#383](https://github.com/turquoiseowl/i18n/issues/383)).
+
 #### 2.1.14 (20180710)
 
-* FIX: "Localization of outgoing URIs" feature issue in version 2.1.13 ([#374](https://github.com/turquoiseowl/i18n/issues/374)).
+* FIX: Localization of outgoing URIs" feature issue in version 2.1.13 ([#374](https://github.com/turquoiseowl/i18n/issues/374)).
 
 #### 2.1.13 (20180707)
 
